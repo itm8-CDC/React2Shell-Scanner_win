@@ -1,0 +1,67 @@
+name: Custom.Generic.Detection.React2Shell.ReactServerComponents
+author: itm8 CDC
+description: |
+  ...
+
+parameters:
+  - name: UploadHits
+    type: bool
+  - name: YaraRule
+    description: Second option Yara choice is a Velociraptor shorthand Yara rule
+    default: | 
+      rule detect_react2shell_rsc_vuln
+      {
+        meta:
+          description = "Detects react-server-dom-* dependency vulnerable to React2Shell (CVE-2025-55182) as in bash audit script"
+          affected_versions = "19.0.0, 19.1.0, 19.1.1, 19.2.0"
+          patched_versions = "19.0.1, 19.1.2, 19.2.1+"
+
+        strings:
+          // package.json style:     "react-server-dom-xxx": "19.1.0"
+          $package_json = /"react-server-dom-(webpack|parcel|turbopack)"\s*:\s*"[^"]*(19\.0\.0|19\.1\.0|19\.1\.1|19\.2\.0)[^"]*"/ nocase
+
+          // package-lock.json style:    "name": "react-server-dom-xxx", ... "version": "19.1.0"
+          // Note: 200 chars between name and version (ungreedy not possible in YARA, but this is narrow-enough for false positives to be rare)
+          $package_lock = /"name"\s*:\s*"react-server-dom-(webpack|parcel|turbopack)"[\s\S]{0,200}"version"\s*:\s*"(19\.0\.0|19\.1\.0|19\.1\.1|19\.2\.0)"/ nocase
+
+          // yarn.lock style:   react-server-dom-xxx@^19.1.0:
+          $yarn_lock = /react-server-dom-(webpack|parcel|turbopack)@[^:\n]*19\.(0\.0|1\.0|1\.1|2\.0)/ nocase
+
+          // pnpm-lock.yaml style:   /react-server-dom-xxx@19.1.0:
+          $pnpm_lock = /\/?react-server-dom-(webpack|parcel|turbopack)@19\.(0\.0|1\.0|1\.1|2\.0):/ nocase
+
+        condition:
+          any of them
+      }
+
+
+sources:
+  - query: |
+      -- first find all matching glob
+      LET files = SELECT OSPath, Name, Size, Mtime, Atime, Ctime, Btime
+        FROM glob(globs=["**/package.json", "**/package-lock.json", "**/yarn.lock","**/pnpm-lock.yaml"],nosymlink='True')
+        WHERE NOT IsDir AND NOT IsLink
+          
+      -- scan files and only report a single hit.
+      LET hits = SELECT * FROM foreach(row=files,
+            query={
+                SELECT
+                    FileName as OSPath,
+                    File.Size AS Size,
+                    str(str=String.Data) AS HitContext,
+                    String.Offset AS HitOffset,
+                    Mtime, Atime, Ctime, Btime
+                FROM yara(rules=YaraRule,files=OSPath)
+                LIMIT 1
+            })
+
+      -- upload files that have hit
+      LET upload_hits=SELECT *,
+            upload(file=OSPath) AS Upload
+        FROM hits
+
+      -- return rows
+      SELECT * FROM if(condition=UploadHits,
+        then=upload_hits,
+        else=hits)
+

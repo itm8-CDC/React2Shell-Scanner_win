@@ -1,0 +1,80 @@
+name: Custom.Generic.Detection.React2Shell.NextJS
+author: itm8 CDC
+description: |
+  ...
+
+parameters:
+  - name: UploadHits
+    type: bool
+  - name: YaraRule
+    description: Second option Yara choice is a Velociraptor shorthand Yara rule
+    default: | 
+      rule detect_react2shell_vulnerable_next_js
+      {
+        meta:
+          description = "Detects adjacent name+version fields for nextjs (react2shell CVE-2025-66478), with affected versions, excluding safe patches. Handles minified or formatted JSON."
+
+        strings:
+          $name_version = /"name"\s*:\s*"next"\s*,\s*"version"\s*:\s*"(14\.3\.[0-9]+-canary\.[7-9][7-9][0-9]*|15(\.[0-9]+){0,2}(-canary\.[0-9]+)?|16(\.[0-9]+){0,2}(-canary\.[0-9]+)?)"/ nocase
+
+          // Exclusions: always make \s* optional for minified whitespace
+          $exclude_16_0_7 = /"name"\s*:\s*"next"\s*,\s*"version"\s*:\s*"16\.0\.7"/ nocase
+          $exclude_16_1_0_canary_12 = /"name"\s*:\s*"next"\s*,\s*"version"\s*:\s*"16\.1\.0-canary\.(1[2-9]|[2-9][0-9])"/ nocase
+          $exclude_15_6_0_canary_58 = /"name"\s*:\s*"next"\s*,\s*"version"\s*:\s*"15\.6\.0-canary\.(5[8-9]|[6-9][0-9])"/ nocase
+          $exclude_15_5_7 = /"name"\s*:\s*"next"\s*,\s*"version"\s*:\s*"15\.5\.[7-9]"/ nocase
+          $exclude_15_4_8 = /"name"\s*:\s*"next"\s*,\s*"version"\s*:\s*"15\.4\.[8-9]"/ nocase
+          $exclude_15_3_6 = /"name"\s*:\s*"next"\s*,\s*"version"\s*:\s*"15\.3\.[6-9]"/ nocase
+          $exclude_15_2_6 = /"name"\s*:\s*"next"\s*,\s*"version"\s*:\s*"15\.2\.[6-9]"/ nocase
+          $exclude_15_1_9 = /"name"\s*:\s*"next"\s*,\s*"version"\s*:\s*"15\.1\.9"/ nocase
+          $exclude_15_0_5 = /"name"\s*:\s*"next"\s*,\s*"version"\s*:\s*"15\.0\.[5-9]"/ nocase
+          $exclude_15_above5 = /"name"\s*:\s*"next"\s*,\s*"version"\s*:\s*"15\.[7-9]\.[0-9]?(-canary\.?[1-9]?[0-9])"/ nocase
+          $exclude_16_0_above7 = /"name"\s*:\s*"next"\s*,\s*"version"\s*:\s*"16\.0\.[8-9]?(-canary\.?[1-9]?[0-9])"/ nocase
+
+        condition:
+          $name_version
+          and not any of (
+            $exclude_16_0_7,
+            $exclude_16_1_0_canary_12,
+            $exclude_15_6_0_canary_58,
+            $exclude_15_5_7,
+            $exclude_15_4_8,
+            $exclude_15_3_6,
+            $exclude_15_2_6,
+            $exclude_15_1_9,
+            $exclude_15_0_5,
+            $exclude_15_above5,
+            $exclude_16_0_above7
+          )
+      }
+
+
+sources:
+  - query: |
+      -- first find all matching glob
+      LET files = SELECT OSPath, Name, Size, Mtime, Atime, Ctime, Btime
+        FROM glob(globs=["**/package.json", "**/package-lock.json", "**/yarn.lock","**/pnpm-lock.yaml"],nosymlink='True')
+        WHERE NOT IsDir AND NOT IsLink
+          
+      -- scan files and only report a single hit.
+      LET hits = SELECT * FROM foreach(row=files,
+            query={
+                SELECT
+                    FileName as OSPath,
+                    File.Size AS Size,
+                    str(str=String.Data) AS HitContext,
+                    String.Offset AS HitOffset,
+                    Mtime, Atime, Ctime, Btime
+                FROM yara(rules=YaraRule,files=OSPath)
+                LIMIT 1
+            })
+
+      -- upload files that have hit
+      LET upload_hits=SELECT *,
+            upload(file=OSPath) AS Upload
+        FROM hits
+
+      -- return rows
+      SELECT * FROM if(condition=UploadHits,
+        then=upload_hits,
+        else=hits)
+
