@@ -14,7 +14,7 @@ This is a convenience scanner of the affected NextJS and ReactServerComponents v
 
 ## How to use
 1. [Download](https://github.com/itm8-CDC/React2Shell-Scanner_win/archive/refs/heads/main.zip) or clone this repository
-2. Run "run.bat" by right clicking the file and choosing "Run as administrator"
+2. Run "run.bat" by double clicking, elevation will be asked for if possible.
    1. It is possible that powershell will ask you to allow running a webmarked file, Press R and enter
 3. Two powershell windows will be open as long as the scanner is running, when done it will close.
 4. Initial benchmarking of the scanner is set to 20-30 minutes for a run, velociraptor is set with the --cpu-limit=5 flag to avoid disruptions, this can of course be removed if wanted in the .ps1 files
