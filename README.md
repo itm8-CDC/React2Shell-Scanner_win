@@ -4,6 +4,7 @@ An React2Shell convenience scanner for Microsoft Windows-based systems based on 
 
 ## What's this?
 This is a convenience scanner of the affected NextJS and ReactServerComponents versions of CVE-2025-55182 and CVE-2025-66478 (React2Shell) for Microsoft Windows-based systems.
+It uses yara in velociraptor to search for .lock files which contains the affected versions. The "scan" is file based and cannot tell if the actual vulnerable package is running on the system.
 
 
 | Will this? |  :white_check_mark::x: |
@@ -20,6 +21,21 @@ This is a convenience scanner of the affected NextJS and ReactServerComponents v
 4. Initial benchmarking of the scanner is set to 20-30 minutes for a run, velociraptor is set with the --cpu-limit=5 flag to avoid disruptions, this can of course be removed if wanted in the .ps1 files
 5. A file named nextjs_SEE_YOUR_RESULTS_HERE.zip and rsc_SEE_YOUR_RESULTS_HERE.zip should be put in the directory of the scanner
 6. Unzip these file(s) and open either the json or csv file(s) to see where it found possible indicators of the affected Nextjs or RSC version(s)
+
+### Run on linux
+1. goto https://github.com/Velocidex/velociraptor/releases and find an applicable release for your system
+2. In example this is for 64bit
+```bash
+# Requires git installed and wget, only for 64bit
+git clone https://github.com/itm8-CDC/React2Shell-Scanner_win
+cd React2Shell-Scanner_win
+wget https://github.com/Velocidex/velociraptor/releases/download/v0.75/velociraptor-v0.75.5-linux-amd64
+chmod +x velociraptor-v0.75.5-linux-amd64
+./velociraptor-v0.75.5-linux-amd64 artifacts --definitions=./artifacts collect Custom.Generic.Detection.React2Shell.NextJS --output=./nextjs_SEE_YOUR_RESULTS_HERE.zip --format=csv --cpu_limit=5
+./velociraptor-v0.75.5-linux-amd64 artifacts --definitions=./artifacts collect Custom.Generic.Detection.React2Shell.ReactServerComponents --output=./rsc_SEE_YOUR_RESULTS_HERE.zip --format=csv --cpu_limit=5
+# See 5. in "How to use" from here
+```
+
 
 
 ## Known issues
